@@ -45,8 +45,8 @@ def run():
 
   options = pipeline_options.PipelineOptions(
       temp_location='gs://msw-dev/tmp',
-      project='bioacoustics-216319',
-      region='us-central1',
+      project='whalesong-410301',
+      region='us-east1',
       job_name='examplegen',
       runner='DataflowRunner',
       setup_file=os.path.join(pathlib.Path(__file__).parent, 'setup.py'),

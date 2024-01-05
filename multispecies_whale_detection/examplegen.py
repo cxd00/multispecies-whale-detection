@@ -80,7 +80,7 @@ class Configuration:
   input_directory: str
   output_directory: str
   clip_duration_seconds: float = 10
-  resample_rate: int = 16000
+  resample_rate: int = 10000
 
 
 @dataclass
@@ -665,12 +665,14 @@ def run(configuration: Configuration,
     audio_files = all_files | 'MatchAudio' >> extension_filter(
         {'.wav', '.flac'})
     csv_files = all_files | 'MatchCsv' >> extension_filter({'.csv'})
+    print(csv_files)
 
     audio_streams = (
         audio_files | 'ReadAudio' >> fileio.ReadMatches() |
         'KeyAudioByFilename' >> beam.Map(lambda r: (r.metadata.path, r)))
     annotations = (csv_files | 'ReadCsv' >> fileio.ReadMatches() |
                    'ParseCsv' >> beam.ParDo(beam_read_annotations))
+    print(annotations[0])
     labeled_streams = ({
         'audio': audio_streams,
         'annotations': annotations,
@@ -681,6 +683,7 @@ def run(configuration: Configuration,
     # To make sure training examples within a batch are as close as possible to
     # being independent, shuffle at the level of the entire pipeline run.
     examples = examples | beam.Reshuffle()
+    print("Examples", examples.shape)
     _ = examples | 'WriteRecords' >> beam.io.tfrecordio.WriteToTFRecord(
         os.path.join(configuration.output_directory, 'tfrecords'),
         coder=beam.coders.ProtoCoder(tf.train.Example))

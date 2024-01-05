@@ -32,14 +32,14 @@ from multispecies_whale_detection import examplegen
 
 def run():
   """Configures and runs the pipeline and waits on completion."""
-  out_dir = os.path.expanduser('~/tmp/examplegen/output')
+  out_dir = os.path.expanduser('/content/tmp/output')
   shutil.rmtree(out_dir)
   os.mkdir(out_dir)
 
   configuration = examplegen.Configuration(
-      input_directory=os.path.expanduser('~/tmp/examplegen/input'),
+      input_directory=os.path.expanduser('/content/tmp/input'),
       output_directory=out_dir,
-      resample_rate=4000,
+      resample_rate=10000,
       clip_duration_seconds=10.0,
   )
 
