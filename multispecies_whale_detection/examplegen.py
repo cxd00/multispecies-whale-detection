@@ -79,7 +79,7 @@ class Configuration:
   """Application settings for the pipeline."""
   input_directory: str
   output_directory: str
-  clip_duration_seconds: float = 10
+  clip_duration_seconds: float = 3.94
   resample_rate: int = 10000
 
 
@@ -126,6 +126,7 @@ class Annotation:
       ValueError if the given row does not include all the required fields.
     """
     label = row.get('label', None)
+    # print(label)
     if not label:
       raise ValueError('label was empty or not provided')
     begin_rel_file = row.get('begin', None)
@@ -138,11 +139,14 @@ class Annotation:
       )
     begin_text = row.get('begin_utc', None)
     end_text = row.get('end_utc', None)
+    # implicit_negatives = row.get("implicit_negatives", False)
+    # print(implicit_negatives,'hi',row["label"])
     if begin_text and end_text:
       return UTCAnnotation(
           label=row['label'],
           begin=_parse_utc(begin_text),
           end=_parse_utc(end_text),
+          # implicit_negatives=implicit_negatives
       )
     raise ValueError('row should have either both "begin" and "end" fields '
                      'or both "begin_utc" and "end_utc" fields')
@@ -172,6 +176,7 @@ def _restrict_to_clip(
     end: datetime.timedelta,
     clip_metadata: ClipMetadata,
     label: str,
+    # implicit_negatives=False
 ) -> Optional[ClipAnnotation]:
   """Restricts an interval to the duration from ClipMetadata.
 
@@ -234,6 +239,7 @@ class UTCAnnotation(Annotation):
     self.label = label
     self.begin = begin
     self.end = end
+    # self.implicit_negatives = implicit_negatives
 
   def make_relative(self,
                     clip_metadata: ClipMetadata) -> Optional[ClipAnnotation]:
@@ -253,6 +259,7 @@ class UTCAnnotation(Annotation):
         self.end - clip_metadata.start_utc,
         clip_metadata,
         self.label,
+        # self.implicit_negatives
     )
 
 
@@ -320,7 +327,7 @@ class AnnotationCoder(beam.coders.Coder):
 
     datetime_coder = UTCDatetimeCoder()
     self._utc_coder = beam.coders.TupleCoder(
-        (datetime_coder, datetime_coder, beam.coders.StrUtf8Coder()))
+        (datetime_coder, datetime_coder, beam.coders.StrUtf8Coder(), beam.coders.BooleanCoder()))
 
   def encode(self, annotation):
     if isinstance(annotation, FileAnnotation):
@@ -472,7 +479,7 @@ def generate_clips(
 
 def audio_example(clip_metadata: ClipMetadata, waveform: np.array,
                   sample_rate: int, channel: int,
-                  annotations: Iterable[ClipAnnotation]) -> tf.train.Example:
+                  annotations: Iterable[ClipAnnotation],print_st = False) -> tf.train.Example:
   """Constructs a TensorFlow Example with labeled audio.
 
   Args:
@@ -524,7 +531,11 @@ def audio_example(clip_metadata: ClipMetadata, waveform: np.array,
     features[
         dataset.Features.ANNOTATION_LABEL.value.name].bytes_list.value.append(
             annotation.label.encode())
+    # features[
+    #     dataset.Features.IMPLICIT_NEGATIVES.value.name].bytes_list.value.append(
+    #         annotation.implicit_negatives.encode())
 
+    # print(features[dataset.Features.IMPLICIT_NEGATIVES.value.name])
   return example
 
 
@@ -548,7 +559,7 @@ class AnnotationTrees:
         assert is_utc or is_file
 
   def annotate_clip(self,
-                    clip_metadata: ClipMetadata) -> Iterable[ClipAnnotation]:
+                    clip_metadata: ClipMetadata, print_st: False) -> Iterable[ClipAnnotation]:
     file_intervals = self._file_tree[clip_metadata.start_relative_to_file:(
         clip_metadata.start_relative_to_file + clip_metadata.duration)]
     if clip_metadata.start_utc:
@@ -560,6 +571,8 @@ class AnnotationTrees:
       annotation = interval.data
       clip_annotation = annotation.make_relative(clip_metadata)
       if clip_annotation:
+        if print_st:
+          print("clippy", clip_annotation)
         yield clip_annotation
 
 
@@ -592,14 +605,13 @@ def make_audio_examples(
     these Examples, see :py:func:`audio_example`.
   """
   filename, join_result = keyed_join_result
-  del filename  # Trust readable_file more.
+  # del filename  # Trust readable_file more.
 
   readable_file = _only_element(join_result['audio'])
   if not readable_file:
     beam.metrics.Metrics.counter('examplegen', 'audio_file_not_found').inc()
     return
-  filename = readable_file.metadata.path
-
+  filename = readable_file.metadata.path.split("/")[-1]
   annotation_trees = AnnotationTrees(join_result['annotations'])
 
   with readable_file.open() as infile:
@@ -615,7 +627,7 @@ def make_audio_examples(
             axis=0,
         )
 
-      clip_annotations = annotation_trees.annotate_clip(clip_metadata)
+      clip_annotations = annotation_trees.annotate_clip(clip_metadata, filename == "Cross_A_02_060203_071428.d20.x.flac")
 
       for channel, waveform in enumerate(pcm_audio.T):
         # TODO(mattharvey): Option for annotations to pertain to either or all
@@ -627,6 +639,7 @@ def make_audio_examples(
             sample_rate=resample_rate,
             channel=channel,
             annotations=clip_annotations,
+            print_st=filename=="Cross_A_02_060203_071428.d20.x.flac"
         )
 
 
@@ -636,9 +649,11 @@ def extension_filter(kept_extensions: Iterable[str]) -> beam.PTransform:
   def keep_fn(file_metadata: beam.io.filesystem.FileMetadata) -> bool:
     _, extension = os.path.splitext(file_metadata.path)
     return extension in kept_extensions
-
   return beam.Filter(keep_fn)
 
+def wot(r):
+  print("looking for metadata",  r.metadata.path.split("/")[-1])
+  return (r.metadata.path.split("/")[-1], r)
 
 def run(configuration: Configuration,
         options: beam.options.pipeline_options.PipelineOptions) -> None:
@@ -664,13 +679,13 @@ def run(configuration: Configuration,
         configuration.input_directory + '/**')
     audio_files = all_files | 'MatchAudio' >> extension_filter(
         {'.wav', '.flac'})
-    csv_files = all_files | 'MatchCsv' >> extension_filter({'.csv'})    
+    csv_files = all_files | 'MatchCsv' >> extension_filter({'.csv'})
 
     audio_streams = (
         audio_files | 'ReadAudio' >> fileio.ReadMatches() |
-        'KeyAudioByFilename' >> beam.Map(lambda r: (r.metadata.path, r)))
+        'KeyAudioByFilename' >> beam.Map(wot))
     annotations = (csv_files | 'ReadCsv' >> fileio.ReadMatches() |
-                   'ParseCsv' >> beam.ParDo(beam_read_annotations))    
+                   'ParseCsv' >> beam.ParDo(beam_read_annotations))
     labeled_streams = ({
         'audio': audio_streams,
         'annotations': annotations,
@@ -680,7 +695,8 @@ def run(configuration: Configuration,
         bind_make_audio_examples)
     # To make sure training examples within a batch are as close as possible to
     # being independent, shuffle at the level of the entire pipeline run.
-    examples = examples | beam.Reshuffle()    
+    examples = examples | beam.Reshuffle()
+
     _ = examples | 'WriteRecords' >> beam.io.tfrecordio.WriteToTFRecord(
         os.path.join(configuration.output_directory, 'tfrecords'),
         coder=beam.coders.ProtoCoder(tf.train.Example))

@@ -49,14 +49,31 @@ def run(argv: Sequence[str]) -> None:
   )
   args = arg_parser.parse_args(argv[1:])
 
-  input_dataset = dataset.new(args.tfrecord_filepattern)
-  for features in itertools.islice(input_dataset, args.limit):
-    for key, value in features.items():
-      if isinstance(value, tf.sparse.SparseTensor):
-        value = value.values
-      print(key + ':')
-      print(value)
-    print()
+  # input_dataset = dataset.new(args.tfrecord_filepattern)
+  # for features in itertools.islice(input_dataset, args.limit):
+  #   for key, value in features.items():
+  #     if isinstance(value, tf.sparse.SparseTensor):
+  #       value = value.values
+  #     if key == "annotation_label":
+  #       print(key + ':', value)
+  #   print()
+  input_dataset = dataset.new_window_dataset(
+    tfrecord_filepattern=args.tfrecord_filepattern,
+    duration=3.94/2,
+    windowing=dataset.SlidingWindowing(1.0),
+    class_names=["Mn"]
+  )
+  for window, labels in input_dataset:
+    print(labels)   
+  # print(input_dataset.take(1))
+  # for features in itertools.islice(input_dataset, args.limit):
+  #   print(features[1])
+    # for key, value in features.items():
+    #   if isinstance(value, tf.sparse.SparseTensor):
+    #     value = value.values
+    #   print(key + ':')
+    #   print(value)
+    # print()
 
 
 if __name__ == '__main__':

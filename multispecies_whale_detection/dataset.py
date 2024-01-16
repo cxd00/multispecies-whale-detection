@@ -25,6 +25,7 @@ import abc
 import dataclasses
 import enum
 import functools
+import glob
 from typing import Dict, Sequence, Optional, Tuple, Union
 
 import numpy as np
@@ -56,6 +57,7 @@ class Features(enum.Enum):
                              tf.io.VarLenFeature(tf.float32))
   ANNOTATION_END = Feature('annotation_end', tf.io.VarLenFeature(tf.float32))
   ANNOTATION_LABEL = Feature('annotation_label', tf.io.VarLenFeature(tf.string))
+  # IMPLICIT_NEGATIVES = Feature('implicit_negatives', tf.io.FixedLenFeature([], tf.string))
 
 
 FeaturesType = Dict[str, Union[tf.Tensor, tf.sparse.SparseTensor]]
@@ -84,6 +86,7 @@ def parse_fn(serialized_example: bytes) -> FeaturesType:
   """
   features = tf.io.parse_single_example(
       serialized_example, {f.value.name: f.value.spec for f in Features})
+  # print(features["implicit_negatives"])
   audio_key: str = Features.AUDIO.value.name
   features[audio_key] = tf.cast(tf.io.decode_raw(features[audio_key], tf.int16),
                                 tf.float32) / np.iinfo(np.int16).max
@@ -92,7 +95,9 @@ def parse_fn(serialized_example: bytes) -> FeaturesType:
 
 def new(tfrecord_filepattern: str):
   """Creates a Dataset yielding dicts with the schema declared in Features."""
-  dataset = tf.data.TFRecordDataset(tf.io.gfile.glob(tfrecord_filepattern))
+  print("GLLOB?", glob.glob(tfrecord_filepattern))
+  dataset = tf.data.TFRecordDataset(glob.glob(tfrecord_filepattern))
+  print(dataset)
   dataset = dataset.map(parse_fn)
   return dataset
 
@@ -288,6 +293,7 @@ class SlidingWindowing(Windowing):
     while begin + duration <= _audio_duration(features):
       window, label = extract_window(features, begin, duration, class_names,
                                      min_overlap)
+      print(label)
       extracted_windows = extracted_windows.write(index, window)
       extracted_labels = extracted_labels.write(index, label)
       begin += self.hop

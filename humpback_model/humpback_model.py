@@ -131,7 +131,7 @@ class MainPath(tf.keras.layers.Layer):
     self._layers = [
         Conv2D(
             self.num_inner_channels,
-            kernel_size=1,
+            kernel_size=3,
             strides=self.input_stride,
             padding=bottleneck_padding,
             name='conv_bottleneck'),
@@ -142,16 +142,16 @@ class MainPath(tf.keras.layers.Layer):
             kernel_size=3,
             strides=1,
             padding='SAME',
-            name='conv'),
-        BatchNormalization(name='batch_normalization'),
-        tf.keras.layers.ReLU(name='relu'),
-        Conv2D(
-            self.num_output_channels,
-            kernel_size=1,
-            strides=1,
-            padding='SAME',
             name='conv_output'),
-        BatchNormalization(name='batch_normalization_output'),
+        BatchNormalization(name='batch_normalization'),
+        # tf.keras.layers.ReLU(name='relu'),
+        # Conv2D(
+        #     self.num_output_channels,
+        #     kernel_size=1,
+        #     strides=1,
+        #     padding='SAME',
+        #     name='conv_output'),
+        # BatchNormalization(name='batch_normalization_output'),
     ]
 
   def call(self, inputs):
@@ -242,12 +242,12 @@ class Embed(tf.keras.layers.Layer):
 
   def build(self, input_shape):
     self._layers = [
-        tf.keras.layers.InputLayer(input_shape=[128, 64]),
+        tf.keras.layers.InputLayer(input_shape=[255, 255]),
         PreBlocks(),
-        Group(3, 64, 256, input_stride=1, name='group'),
-        Group(4, 128, 512, input_stride=2, name='group_1'),
-        Group(6, 256, 1024, input_stride=2, name='group_2'),
-        Group(3, 512, 2048, input_stride=2, name='group_3'),
+        Group(2, 64, 64, input_stride=1, name='group'),
+        Group(2, 128, 128, input_stride=2, name='group_1'),
+        Group(2, 256, 256, input_stride=2, name='group_2'),
+        Group(2, 512, 512, input_stride=2, name='group_3'),
         tf.keras.layers.GlobalAveragePooling2D(name='pool'),
     ]
 
@@ -281,29 +281,29 @@ class Model(tf.keras.Sequential):
 
   def __init__(self):
     super(Model, self).__init__(layers=[
-        front_end.MelSpectrogram(),
-        leaf_pcen.PCEN(
-            alpha=0.98,
-            delta=2.0,
-            root=2.0,
-            smooth_coef=0.025,
-            floor=1e-6,
-            trainable=True,
-            name='pcen',
-        ),
+        # front_end.MelSpectrogram(),
+        # leaf_pcen.PCEN(
+        #     alpha=0.98,
+        #     delta=2.0,
+        #     root=2.0,
+        #     smooth_coef=0.025,
+        #     floor=1e-6,
+        #     trainable=True,
+        #     name='pcen',
+        # ),
         Embed(),
         tf.keras.layers.Dense(NUM_CLASSES),
     ])
-    front_end_layers = self.layers[:2]
-    self._spectrogram, self._pcen = front_end_layers
+    # front_end_layers = self.layers[:2]
+    # self._spectrogram, self._pcen = front_end_layers
 
-    # Parts exposed through Reusable SavedModels interface.
-    self.front_end = tf.keras.Sequential(
-        [tf.keras.layers.InputLayer([None, 1])] + front_end_layers)
-    self.features = tf.keras.Sequential(
-        [tf.keras.layers.InputLayer([128, 64]), self.layers[2]])
-    self.logits = tf.keras.Sequential([tf.keras.layers.InputLayer([128, 64])] +
-                                      self.layers[2:])
+    # # Parts exposed through Reusable SavedModels interface.
+    # self.front_end = tf.keras.Sequential(
+    #     [tf.keras.layers.InputLayer([None, 1])] + front_end_layers)
+    # self.features = tf.keras.Sequential(
+    #     [tf.keras.layers.InputLayer([128, 64]), self.layers[2]])
+    # self.logits = tf.keras.Sequential([tf.keras.layers.InputLayer([128, 64])] +
+    #                                   self.layers[2:])
 
   @tf.function(input_signature=[
       tf.TensorSpec(shape=(None, None, 1), dtype=tf.float32),
@@ -326,7 +326,7 @@ class Model(tf.keras.Sequential):
       model outputs. (Post-sigmoid, in [0, 1].)
     """
     batch_size = tf.shape(waveform)[0]
-    stft_frame_step_samples = 300
+    stft_frame_step_samples = 300 # fourier transform length
     context_step_frames = tf.cast(
         context_step_samples // stft_frame_step_samples, tf.dtypes.int32)
     mel_spectrogram = self._spectrogram(waveform)
