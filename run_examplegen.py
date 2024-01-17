@@ -39,7 +39,7 @@ def run():
   configuration = examplegen.Configuration(
       input_directory='gs://msw-dev/input',
       output_directory='gs://msw-dev/output',
-      resample_rate=4000,
+      resample_rate=10000,
       clip_duration_seconds=10.0,
   )
 

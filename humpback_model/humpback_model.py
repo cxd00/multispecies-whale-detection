@@ -242,7 +242,7 @@ class Embed(tf.keras.layers.Layer):
 
   def build(self, input_shape):
     self._layers = [
-        tf.keras.layers.InputLayer(input_shape=[255, 255]),
+        tf.keras.layers.InputLayer(input_shape=[255, 255, 3]),
         PreBlocks(),
         Group(2, 64, 64, input_stride=1, name='group'),
         Group(2, 128, 128, input_stride=2, name='group_1'),
