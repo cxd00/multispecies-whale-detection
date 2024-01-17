@@ -1,5 +1,9 @@
 # Multispecies Whale Detection
 
+For L46 project code, please see the L46 folder. The whalesong.ipynb notebook contains my initial attempts to get the humpback whale paper code working; the other notebook includes my work on the Cornell dataset, which is what I wrote up for the paper.
+
+Data and files used to generate figures are available in my Google drive and can be provided upon request.
+
 This repository contains tools Google implemented for the development of a
 neural network to detect whale vocalizations and classify them across several
 species and geographies. We release the code in the hope that it will allow
